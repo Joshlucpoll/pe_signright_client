@@ -1,16 +1,5 @@
-# pe_signright_client
+# Primary Engineer: SignRight (client app)
 
-A new Flutter project.
+iPad app built using Flutter for Primary Engineer 2024. SignRight is a sign language translation app (ASL). This client app allows: the user to take video recordings that are sent to a server which hosts the translation AI; receive a caption response and display the translation. Playful animations are used through-out the app to appeal to the younger audience which this app is targeted at.
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+![](assets/bear.png)
