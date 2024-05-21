@@ -1,10 +1,12 @@
+import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:http/http.dart' as http;
-import 'dart:io';
+import 'package:pe_signright_client/settings.dart';
+import 'package:pe_signright_client/translation.dart';
+import 'package:pull_down_button/pull_down_button.dart';
 
 void main() => runApp(MyApp());
 
@@ -12,6 +14,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoApp(
+      debugShowCheckedModeBanner: false,
+      theme: const CupertinoThemeData(
+        brightness: Brightness.light,
+      ),
       home: CameraFeed(),
     );
   }
@@ -27,6 +33,9 @@ class _CameraFeedState extends State<CameraFeed> {
   List<CameraDescription> _cameras = [];
   int _selectedCameraIdx = 0;
   bool _isRecording = false; // Added to track recording state
+  int _currentRecordingSeconds = 0;
+
+  String model = "ASL-100";
 
   @override
   void initState() {
@@ -60,31 +69,18 @@ class _CameraFeedState extends State<CameraFeed> {
     }
   }
 
-  Future<void> _sendVideoToApi(String videoFilePath) async {
-    // Create a multipart request
-    var request = http.MultipartRequest(
-        'POST', Uri.parse('http://192.168.0.114:3000/translate'));
+  Future<void> incrementRecordingSeconds() async {
+    await Future.delayed(const Duration(seconds: 1));
 
-    // Attach the video file to the request
-    var videoFile = File(videoFilePath);
-    var videoStream = http.ByteStream(videoFile.openRead());
-    var videoLength = await videoFile.length();
-    var videoMultipartFile = http.MultipartFile(
-      'video',
-      videoStream,
-      videoLength,
-      filename: videoFile.path,
-    );
-    request.files.add(videoMultipartFile);
-
-    // Send the request
-    var response = await request.send();
-
-    // Check the response status
-    if (response.statusCode == 200) {
-      print('Video sent successfully');
+    if (_isRecording) {
+      setState(() {
+        _currentRecordingSeconds++;
+      });
+      incrementRecordingSeconds();
     } else {
-      print('Failed to send video. Error: ${response.reasonPhrase}');
+      setState(() {
+        _currentRecordingSeconds = 0;
+      });
     }
   }
 
@@ -97,11 +93,23 @@ class _CameraFeedState extends State<CameraFeed> {
           "Video recording stopped: ${videoFile.path}"); // You might want to handle the saved file further
 
       // Send the video to the API
-      await _sendVideoToApi(videoFile.path);
+      showCupertinoDialog(
+        barrierDismissible: false,
+        context: context,
+        builder: (context) {
+          return TranslationDisplay(
+            model: model.split('-')[1],
+            videoPath: videoFile.path,
+          );
+        },
+      );
     } else {
       // Start recording
       await _controller!.startVideoRecording();
       print("Video recording started");
+
+      // Start the timer
+      incrementRecordingSeconds();
     }
     setState(() {
       _isRecording = !_isRecording; // Toggle recording state
@@ -138,32 +146,148 @@ class _CameraFeedState extends State<CameraFeed> {
               child: CameraPreview(_controller!),
             ),
           ),
+          Positioned(
+            top: 20,
+            right: 20,
+            child: CupertinoButton(
+              onPressed: () => Navigator.of(context).push(
+                CupertinoPageRoute<void>(
+                  builder: (BuildContext context) {
+                    return const SettingsPage();
+                  },
+                ),
+              ),
+              child: const Icon(
+                CupertinoIcons.gear_alt_fill,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 20,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _isRecording
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${(_currentRecordingSeconds ~/ 60).toString().padLeft(2, '0')}:${(_currentRecordingSeconds % 60).toString().padLeft(2, '0')}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    : const SizedBox(),
+              ],
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 20),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Opacity(
-                  child: CupertinoButton(
-                    onPressed: () {},
-                    child: const Icon(CupertinoIcons.photo_camera),
+                PullDownButton(
+                  position: PullDownMenuPosition.over,
+                  buttonAnchor: PullDownMenuAnchor.start,
+                  menuOffset: -16,
+                  // itemsOrder: PullDownMenuItemsOrder.downwards,
+                  itemBuilder: (context) => [
+                    PullDownMenuHeader(
+                      leading: const Icon(
+                        CupertinoIcons.sparkles,
+                        color: Colors.black,
+                      ),
+                      title: 'AI Model',
+                      subtitle: 'Model complexity',
+                      onTap: () {},
+                    ),
+                    ...([
+                      'ASL-100',
+                      'ASL-300',
+                      'ASL-1000',
+                      'ASL-2000',
+                    ]).map((e) {
+                      return PullDownMenuItem.selectable(
+                        title: e,
+                        selected: model == e,
+                        onTap: () {
+                          setState(() {
+                            model = e;
+                          });
+                        },
+                      );
+                    }),
+                  ],
+                  buttonBuilder: (context, showMenu) => SizedBox(
+                    width: 80,
+                    height: 40,
+                    child: CupertinoButton(
+                      onPressed: showMenu,
+                      color: Colors.black.withAlpha(100),
+                      borderRadius: const BorderRadius.horizontal(
+                        left: Radius.circular(100),
+                        right: Radius.circular(100),
+                      ),
+                      padding: EdgeInsets.zero,
+                      child: Text(
+                        model,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
                   ),
-                  opacity: 0,
                 ),
-                CupertinoButton(
-                  borderRadius: BorderRadius.circular(10),
-                  padding: EdgeInsets.all(20),
-                  color: Colors.red,
-                  onPressed: _toggleRecording,
-                  child: Icon(
-                    _isRecording
-                        ? CupertinoIcons.stop_circle
-                        : CupertinoIcons.video_camera,
+                SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.only(bottom: 4, top: 4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.red,
+                      width: 2,
+                    ),
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.transparent,
+                        width: 4,
+                      ),
+                    ),
+                    child: CupertinoButton(
+                      borderRadius: BorderRadius.circular(1000),
+                      padding: EdgeInsets.all(20),
+                      color: Colors.red,
+                      onPressed: _toggleRecording,
+                      child: Icon(
+                        _isRecording
+                            ? CupertinoIcons.stop_circle
+                            : CupertinoIcons.video_camera,
+                      ),
+                    ),
                   ),
                 ),
                 CupertinoButton(
                   onPressed: _cycleCamera,
-                  child: const Icon(CupertinoIcons.switch_camera),
+                  child: const Icon(
+                    CupertinoIcons.switch_camera,
+                    color: Colors.white,
+                  ),
                 ),
               ],
             ),
